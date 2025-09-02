@@ -1,0 +1,105 @@
+1.  TF-IDF Model
+
+import pandas as pd
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+import math
+
+# Step 1: CSV file load
+df = pd.read_csv("resume_job_dataset.csv")
+
+# Step 2: calculate matching resume & job
+vectorizer = TfidfVectorizer(stop_words='english')
+
+for index, row in df.iterrows():
+    resume = row['resume_text']
+    job = row['job_description']
+    
+    documents = [resume.lower(), job.lower()]
+    tfidf = vectorizer.fit_transform(documents)
+    score = cosine_similarity(tfidf[0:1], tfidf[1:2])[0][0]
+    
+    print(f"Resume ID {row['resume_id']} vs Job ID {row['job_id']} → Matching Score (out of 10): {math.ceil(round(score * 10, 2))}")
+
+
+2. spaCy model
+
+import pandas as pd
+import spacy
+import math
+
+# spaCy model load
+nlp = spacy.load("en_core_web_md")
+
+# CSV load
+# df = pd.read_csv("professional_resume_job_dataset.csv")
+df = pd.read_csv("resume_job_dataset.csv")
+
+# score store
+scores = []
+
+# find similarity for per resume-job
+for index, row in df.iterrows():
+    resume_doc = nlp(str(row['resume_text']))
+    job_doc = nlp(str(row['job_description']))
+    similarity = resume_doc.similarity(job_doc)
+    score_out_of_10 = (round(similarity * 10, 2))
+    scores.append(math.ceil(score_out_of_10))
+    print(f"Resume ID {row['resume_id']} vs Job ID {row['job_id']} → Matching Score (out of 10): {math.ceil(score_out_of_10)}")
+
+# add new column
+df['semantic_score_out_of_10'] = scores
+
+# store on new csv
+# df.to_csv("resume_job_semantic_scores.csv", index=False)
+
+# print("✅ Done! Matching scores saved in 'resume_job_semantic_scores.csv'")
+
+
+3. FastText model
+
+import pandas as pd
+import gensim.downloader as api
+from numpy import dot
+from numpy.linalg import norm
+import math
+
+# Load FastText model (may take time initially)
+model = api.load("fasttext-wiki-news-subwords-300")
+
+# Load CSV
+df = pd.read_csv("resume_job_dataset.csv")
+
+def get_sentence_vector(sentence, model):
+    words = sentence.lower().split()
+    word_vectors = [model[word] for word in words if word in model]
+    if len(word_vectors) == 0:
+        return None
+    return sum(word_vectors) / len(word_vectors)
+
+def cosine_similarity(vec1, vec2):
+    return dot(vec1, vec2) / (norm(vec1) * norm(vec2))
+
+# Calculate similarity scores
+scores = []
+
+for i, row in df.iterrows():
+    resume_vec = get_sentence_vector(row['resume_text'], model)
+    job_vec = get_sentence_vector(row['job_description'], model)
+    
+    if resume_vec is not None and job_vec is not None:
+        similarity = cosine_similarity(resume_vec, job_vec)
+        score_10 = round(similarity * 10, 2)
+    else:
+        score_10 = 0.0
+    
+    scores.append(score_10)
+    print(f"Resume ID {row['resume_id']} vs Job ID {row['job_id']} → Matching Score (out of 10): {math.ceil(score_10)}")
+
+# Add scores to DataFrame
+df['fasttext_score_out_of_10'] = scores
+
+# Save updated CSV
+# df.to_csv("resume_job_fasttext_scores.csv", index=False)
+
+# print("✅ Done! FastText scores saved to 'resume_job_fasttext_scores.csv'")
